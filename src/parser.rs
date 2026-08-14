@@ -5,6 +5,10 @@ enum Token {
 
     Let,
     Func,
+    Struct,
+    If,
+    Else,
+
     LeftParen,
     RightParen,
     LeftBrace,
@@ -74,71 +78,19 @@ impl<'a> Lexer<'a> {
 
         let curr = self.current();
         match curr {
-            b'(' => {
-                self.advance();
-                Some(Token::LeftParen)
-            }
-
-            b')' => {
-                self.advance();
-                Some(Token::RightParen)
-            }
-
-            b'[' => {
-                self.advance();
-                Some(Token::LeftBracket)
-            }
-
-            b']' => {
-                self.advance();
-                Some(Token::RightBracket)
-            }
-
-            b'{' => {
-                self.advance();
-                Some(Token::LeftBrace)
-            }
-
-            b'}' => {
-                self.advance();
-                Some(Token::RightBrace)
-            }
-
-            b'*' => {
-                self.advance();
-                Some(Token::Mul)
-            }
-
-            b'/' => {
-                self.advance();
-                Some(Token::Div)
-            }
-
-            b'+' => {
-                self.advance();
-                Some(Token::Add)
-            }
-
-            // @todo handle unary negation
-            b'-' => {
-                self.advance();
-                Some(Token::Sub)
-            }
-
-            b',' => {
-                self.advance();
-                Some(Token::Comma)
-            }
-
-            b'.' => {
-                self.advance();
-                Some(Token::Period)
-            }
-
-            b':' => {
-                self.advance();
-                Some(Token::Colon)
-            }
+            b'(' => { self.advance(); Some(Token::LeftParen) }
+            b')' => { self.advance(); Some(Token::RightParen) }
+            b'[' => { self.advance(); Some(Token::LeftBracket) }
+            b']' => { self.advance(); Some(Token::RightBracket) }
+            b'{' => { self.advance(); Some(Token::LeftBrace) }
+            b'}' => { self.advance(); Some(Token::RightBrace) }
+            b'*' => { self.advance(); Some(Token::Mul) }
+            b'/' => { self.advance(); Some(Token::Div) }
+            b'+' => { self.advance(); Some(Token::Add) }
+            b'-' => { self.advance(); Some(Token::Sub) }
+            b',' => { self.advance(); Some(Token::Comma) }
+            b'.' => { self.advance(); Some(Token::Period) }
+            b':' => { self.advance(); Some(Token::Colon) }
 
             b'=' => {
                 self.advance();
@@ -195,6 +147,9 @@ impl<'a> Lexer<'a> {
                     return Some(match self.source[start..self.pos].as_ref() {
                         "let" => Token::Let,
                         "func" => Token::Func,
+                        "struct" => Token::Struct,
+                        "if" => Token::If,
+                        "else" => Token::Else,
                         s => Token::Ident(s.to_string()),
                     });
                 } else if char::is_digit(curr as char, 10) {
@@ -223,4 +178,137 @@ impl<'a> Lexer<'a> {
     }
 }
 
-// @todo parser 
+#[derive(Debug, PartialEq, Clone)]
+enum BinaryOps {
+    Mul,
+    Div,
+    Add,
+    Sub,
+    LessThan,
+    GreaterThan,
+    GreaterThanEqual,
+    LessThanEqual,
+    EqualEqual,
+    NotEqual,
+}
+
+#[derive(Debug, PartialEq)]
+enum Expr {
+    Number(f64),
+    Ident(String),
+    List(Vec<Expr>),
+    BinaryOp {
+        op: char,
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
+    },
+
+    Call {
+        callee: String,
+        args: Vec<Expr>
+    },
+
+    FieldAccess {
+        receiver: Box<Expr>,
+        field: String
+    },
+
+    If {
+        condition: Box<Expr>,
+        then: Vec<Stmt>,
+        else_: Option<Vec<Stmt>>
+    },
+}
+
+#[derive(Debug, PartialEq)]
+struct Field {
+    name: String,
+    type_: String
+}
+
+#[derive(Debug, PartialEq)]
+enum Stmt {
+    Expr(Expr),
+    Let {
+        name: String,
+        value: Expr,
+    },
+    
+    FuncDecl {
+        name: String,
+        params: Vec<Expr>,
+        body: Vec<Stmt>,
+    },
+
+    Struct {
+        name: String,
+        fields: Vec<Field>
+    }
+}
+
+#[derive(Debug, PartialEq)]
+struct Program {
+    statements: Vec<Stmt>
+}
+
+#[derive(Debug)]
+enum ParseError {
+    Unexpected {
+        expected: Token,
+        found: Token,
+        msg: &'static str
+    },
+
+    UnexpectedToken(Token),
+    UnexpectedEof,
+}
+
+struct Parser<'a> {
+    lexer: Lexer<'a>,
+    current: Option<Token>,
+}
+
+impl<'a> Parser<'a> {
+    pub fn new(source: &'a source) -> Self {
+        let mut parser = {
+            lexer: Lexer::new(source),
+            current: None
+        };
+
+        parser.consume();
+        parser
+    }
+
+    fn consume(&mut self) -> Option<Token> {
+        let previous = self.current.take();
+
+        self.current = self.lexer.next();
+        previous
+    }
+
+    fn expect(&mut self, token: Token, msg: &'static str) -> Result<Token, ParseError> {
+        match &self.current {
+            Some(cur) if *c == token => Ok(self.consume().unwrap()),
+            Some(cur) => Err(ParseError::Unexpected {
+                expected: token,
+                found: cur.clone(),
+                msg
+            }),
+
+            None => Err(ParseError::UnexpectedEof)
+        }
+    }
+
+    pub fn parse(&mut self) -> Result<Program, ParseError> {
+        let mut statements = Vec<Stmt> = vec![];
+        while self.current.is_some() {
+            statements.push(self.parse_stmt()?);
+        }
+
+        Ok(Program {
+            statements
+        })
+    }
+
+    // line 303 in tut
+}
